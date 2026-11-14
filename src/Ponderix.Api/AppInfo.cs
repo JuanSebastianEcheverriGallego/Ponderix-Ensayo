@@ -8,7 +8,7 @@ public static class AppInfo
 {
     public const string Nombre = "Ponderix";
 
-    public const string Version = "1.0.0";
+    public const string Version = "1.1.0";
 
-    public const string Novedad = "Primera versión publicada mediante CI/CD.";
+    public const string Novedad = "Nueva versión desplegada automáticamente: GitHub → CI → CD → Azure.";
 }
