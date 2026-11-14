@@ -119,7 +119,14 @@ dotnet test Ponderix.slnx
 dotnet test Ponderix.slnx --collect "XPlat Code Coverage"
 ```
 
-[PENDIENTE (David): resumen de las pruebas — número de pruebas, qué cubren las unitarias y qué cubren las de integración.]
+El proyecto `tests/Ponderix.Tests` contiene **25 pruebas** (xUnit):
+
+- **Unitarias (19)** — `CalculadoraNotasTests`: promedio ponderado y redondeo, tolerancia de pesos (33.33 + 33.33 + 33.34),
+  límites exactos de cada nivel (4.5, 3.5, 2.5) y validaciones (sin criterios, pesos que no suman 100, notas fuera de 0–5, nombre vacío).
+- **Integración (6)** — `ApiTests`: levanta la API en memoria con `WebApplicationFactory` y comprueba `/health`,
+  `/api/version`, `/api/rubricas`, `POST /api/notas/calcular` (200 y 400) y que `/` sirve la interfaz.
+
+En la CI se ejecutan en la etapa **Validar**; si alguna falla, la etapa **Empaquetar** no se ejecuta y no hay despliegue.
 
 ## 9. Pipeline de CI
 

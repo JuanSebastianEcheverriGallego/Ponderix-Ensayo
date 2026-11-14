@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Ponderix.Api/Ponderix.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ponderix.Tests/Ponderix.Tests.csproj" />
+  </Folder>
 </Solution>
