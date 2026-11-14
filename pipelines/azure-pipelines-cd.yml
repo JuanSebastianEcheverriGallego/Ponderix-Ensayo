@@ -1,0 +1,116 @@
+# =============================================================================
+# Ponderix · Pipeline de ENTREGA CONTINUA (CD)
+# Responsable: Marbel Juliana Mejía Bedoya (@JULIANA-s22)
+#
+# Qué hace:
+#   1. Se activa SOLA cuando la pipeline "ponderix-ci" termina con éxito en main
+#      (recurso de pipeline con trigger). No reacciona a pushes ni a PR.
+#   2. Descarga el artefacto "webapp" de ESA ejecución de CI (no recompila nada).
+#   3. Despliega el .zip en Azure App Service (Linux, .NET 10) usando una
+#      Service Connection (sin credenciales en el repositorio).
+#   4. Prueba de humo: /health debe responder "Healthy" y /api/version debe
+#      devolver el MISMO commit que construyó la CI.
+#
+# VALORES QUE DEBE AJUSTAR MARBEL ANTES DEL MERGE (no son secretos):
+#   - azureServiceConnection → nombre de la Service Connection creada en Azure DevOps.
+#   - webAppName             → nombre real del App Service creado en Azure.
+#   - source (más abajo)     → nombre exacto de la pipeline de CI en Azure DevOps.
+# =============================================================================
+
+trigger: none
+pr: none
+
+resources:
+  pipelines:
+    - pipeline: ci               # alias local; el artefacto queda en $(Pipeline.Workspace)/ci
+      source: ponderix-ci        # [CONFIGURAR] nombre EXACTO de la pipeline de CI
+      trigger:
+        branches:
+          include:
+            - main
+
+variables:
+  azureServiceConnection: 'sc-azure-ponderix'   # [CONFIGURAR] nombre de la Service Connection
+  webAppName: 'ponderix-ensayo-juane'           # nombre del App Service creado en Azure
+  artifactName: webapp
+  environmentName: ponderix-produccion
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: Desplegar
+    displayName: 'Desplegar en Azure App Service'
+    jobs:
+      - deployment: DesplegarWebApp
+        displayName: 'Desplegar artefacto de CI'
+        environment: ${{ variables.environmentName }}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: ci
+                  artifact: webapp
+                  displayName: 'Descargar artefacto "webapp" de la ejecución de CI'
+
+                - bash: |
+                    set -euo pipefail
+                    echo "##vso[build.updatebuildnumber]CD de CI $CI_RUN_NAME"
+                    echo "##[section]Pipeline de origen : $CI_PIPELINE"
+                    echo "##[section]Ejecución de CI    : $CI_RUN_NAME (id $CI_RUN_ID)"
+                    echo "##[section]Rama / commit      : $CI_BRANCH / $CI_COMMIT"
+                    echo "Contenido del artefacto recibido:"
+                    ls -la "$PIPELINE_WORKSPACE/ci/webapp"
+                    ls "$PIPELINE_WORKSPACE"/ci/webapp/*.zip >/dev/null 2>&1 || {
+                      echo "##vso[task.logissue type=error]No se encontró ningún .zip en el artefacto de CI."
+                      exit 1
+                    }
+                    echo "buildinfo.json del artefacto:"
+                    cat "$PIPELINE_WORKSPACE/ci/webapp/buildinfo.json"
+                  displayName: 'Trazabilidad: ejecución de CI y commit recibidos'
+                  env:
+                    CI_PIPELINE: $(resources.pipeline.ci.pipelineName)
+                    CI_RUN_NAME: $(resources.pipeline.ci.runName)
+                    CI_RUN_ID: $(resources.pipeline.ci.runID)
+                    CI_BRANCH: $(resources.pipeline.ci.sourceBranch)
+                    CI_COMMIT: $(resources.pipeline.ci.sourceCommit)
+
+                - task: AzureWebApp@1
+                  name: despliegue
+                  displayName: 'Desplegar .zip en App Service $(webAppName)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    appType: webAppLinux
+                    appName: $(webAppName)
+                    package: $(Pipeline.Workspace)/ci/webapp/*.zip
+                    runtimeStack: 'DOTNETCORE|10.0'
+                    startUpCommand: 'dotnet Ponderix.Api.dll'
+                    deploymentMethod: auto
+
+                - bash: |
+                    set -euo pipefail
+                    URL="${APP_URL%/}"
+                    echo "URL pública: $URL"
+                    echo "Commit esperado: $COMMIT_ESPERADO"
+                    for intento in {1..30}; do
+                      SALUD=`curl -fsS --max-time 20 "$URL/health" || true`
+                      if [ "$SALUD" = "Healthy" ]; then
+                        VERSION_JSON=`curl -fsS --max-time 20 "$URL/api/version" || echo '{}'`
+                        COMMIT=`echo "$VERSION_JSON" | jq -r '.commit // empty'`
+                        if [ "$COMMIT" = "$COMMIT_ESPERADO" ]; then
+                          echo "##[section]Prueba de humo superada en el intento $intento"
+                          echo "$VERSION_JSON" | jq .
+                          exit 0
+                        fi
+                        echo "Intento $intento: la app responde con commit '$COMMIT'; esperando el nuevo despliegue…"
+                      else
+                        echo "Intento $intento: /health todavía no responde 'Healthy' (arranque en frío)…"
+                      fi
+                      sleep 10
+                    done
+                    echo "##vso[task.logissue type=error]La aplicación no publicó el commit $COMMIT_ESPERADO en 5 minutos."
+                    exit 1
+                  displayName: 'Prueba de humo: /health y commit publicado'
+                  env:
+                    APP_URL: $(despliegue.AppServiceApplicationUrl)
+                    COMMIT_ESPERADO: $(resources.pipeline.ci.sourceCommit)
