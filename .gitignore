@@ -1,0 +1,36 @@
+# --- Compilación .NET ---
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+publish/
+out/
+TestResults/
+coverage*/
+*.trx
+
+# --- Editores / SO ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Secretos: NUNCA versionar ---
+.env
+.env.*
+!.env.example
+*.publishsettings
+*.PublishSettings
+*.pubxml.user
+appsettings.*.local.json
+secrets.json
+*.pfx
+*.pem
+*.key
+
+# --- Artefactos locales generados por scripts ---
+*.zip
