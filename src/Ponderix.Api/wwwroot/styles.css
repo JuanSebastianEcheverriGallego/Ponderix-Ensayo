@@ -1,0 +1,82 @@
+:root {
+  --fondo: #f4f6f8;
+  --panel: #ffffff;
+  --texto: #1d2733;
+  --suave: #5b6b7c;
+  --primario: #12355b;
+  --acento: #0f8b8d;
+  --error: #b42318;
+  --borde: #d6dde5;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+.cabecera {
+  background: var(--primario);
+  color: #fff;
+  padding: 24px 16px;
+  text-align: center;
+}
+.cabecera h1 { margin: 0 0 4px; font-size: 2rem; }
+.cabecera p { margin: 4px 0; }
+.novedad {
+  display: inline-block;
+  margin-top: 8px !important;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--acento);
+  font-weight: 600;
+}
+
+main { max-width: 860px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 16px;
+}
+.panel h2 { margin-top: 0; font-size: 1.1rem; }
+
+.plantillas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--borde); }
+input { width: 100%; padding: 6px; border: 1px solid var(--borde); border-radius: 6px; font: inherit; }
+
+button {
+  font: inherit;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--primario);
+  background: var(--primario);
+  color: #fff;
+  cursor: pointer;
+}
+button.secundario { background: #fff; color: var(--primario); }
+button.quitar { background: #fff; color: var(--error); border-color: var(--borde); padding: 4px 8px; }
+
+.acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.suma { flex: 1; color: var(--suave); }
+.suma.error, .resultado.error { color: var(--error); }
+
+.resultado.vacio { color: var(--suave); }
+.nota-final { font-size: 2.2rem; font-weight: 700; margin: 0 0 12px; }
+.nivel { font-size: 1rem; padding: 4px 10px; border-radius: 999px; vertical-align: middle; color: #fff; }
+.nivel.excelente { background: #067647; }
+.nivel.bueno { background: #0f8b8d; }
+.nivel.aceptable { background: #b54708; }
+.nivel.deficiente { background: var(--error); }
+
+.pie { text-align: center; color: var(--suave); font-size: 0.85rem; padding: 16px; }
+
+@media (max-width: 560px) {
+  th:nth-child(4), td:nth-child(4) { width: 40px; }
+}
