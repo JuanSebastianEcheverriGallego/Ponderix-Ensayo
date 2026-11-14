@@ -1,0 +1,167 @@
+# =============================================================================
+# Ponderix · Pipeline de INTEGRACIÓN CONTINUA (CI)
+# Responsable: Jhon Fernando Sánchez Álvarez (@Jhonzn)
+#
+# Qué hace:
+#   Etapa 1 "Validar"    → instala .NET 10, restaura, compila y ejecuta pruebas
+#                           (resultados y cobertura visibles en Azure DevOps).
+#   Etapa 2 "Empaquetar" → publica la API, añade buildinfo.json (build + commit)
+#                           y publica el artefacto "webapp" que consume la CD.
+#
+# Disparadores:
+#   - push a main                → Validar + Empaquetar (genera artefacto).
+#   - Pull Request hacia main    → solo Validar (no se genera artefacto ni despliegue).
+#
+# IMPORTANTE: en Azure DevOps esta pipeline debe llamarse exactamente
+# "ponderix-ci". La pipeline de CD la referencia por ese nombre.
+# =============================================================================
+
+# Número de ejecución visible en Azure DevOps: p. ej. 20261118.3
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+trigger:
+  batch: false
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  buildConfiguration: Release
+  solution: Ponderix.slnx
+  apiProject: src/Ponderix.Api/Ponderix.Api.csproj
+  dotnetSdkVersion: 10.0.x
+  artifactName: webapp
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_NOLOGO: 'true'
+
+stages:
+  # ---------------------------------------------------------------------------
+  - stage: Validar
+    displayName: 'Validar: restaurar, compilar y probar'
+    jobs:
+      - job: CompilarYProbar
+        displayName: 'Compilar y ejecutar pruebas'
+        steps:
+          - checkout: self
+            fetchDepth: 1
+            displayName: 'Descargar código desde GitHub'
+
+          - task: UseDotNet@2
+            displayName: 'Instalar SDK .NET $(dotnetSdkVersion)'
+            inputs:
+              packageType: sdk
+              version: $(dotnetSdkVersion)
+
+          - script: dotnet --info
+            displayName: 'Mostrar versión del SDK'
+
+          - script: dotnet restore $(solution)
+            displayName: 'Restaurar dependencias (NuGet)'
+
+          - script: dotnet build $(solution) --configuration $(buildConfiguration) --no-restore
+            displayName: 'Compilar solución ($(buildConfiguration))'
+
+          - script: >-
+              dotnet test $(solution)
+              --configuration $(buildConfiguration)
+              --no-build
+              --logger trx
+              --results-directory $(Agent.TempDirectory)/TestResults
+              --collect "XPlat Code Coverage"
+            displayName: 'Ejecutar pruebas automatizadas'
+
+          - task: PublishTestResults@2
+            displayName: 'Publicar resultados de pruebas'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: VSTest
+              testResultsFiles: '**/*.trx'
+              searchFolder: $(Agent.TempDirectory)/TestResults
+              testRunTitle: 'Pruebas Ponderix $(Build.BuildNumber)'
+              failTaskOnFailedTests: true
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publicar cobertura de código'
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: $(Agent.TempDirectory)/TestResults/**/coverage.cobertura.xml
+
+  # ---------------------------------------------------------------------------
+  - stage: Empaquetar
+    displayName: 'Empaquetar y publicar artefacto'
+    dependsOn: Validar
+    # En Pull Requests solo se valida; el artefacto desplegable sale únicamente de main.
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: PublicarArtefacto
+        displayName: 'Generar artefacto desplegable'
+        steps:
+          - checkout: self
+            fetchDepth: 1
+            displayName: 'Descargar código desde GitHub'
+
+          - task: UseDotNet@2
+            displayName: 'Instalar SDK .NET $(dotnetSdkVersion)'
+            inputs:
+              packageType: sdk
+              version: $(dotnetSdkVersion)
+
+          - script: >-
+              dotnet publish $(apiProject)
+              --configuration $(buildConfiguration)
+              --output $(Build.ArtifactStagingDirectory)/publish
+            displayName: 'dotnet publish (salida lista para App Service)'
+
+          - bash: |
+              set -euo pipefail
+              FECHA=`date -u +%Y-%m-%dT%H:%M:%SZ`
+              DESTINO="$BUILD_ARTIFACTSTAGINGDIRECTORY/publish/buildinfo.json"
+              cat > "$DESTINO" <<EOF
+              {
+                "build": "$BUILD_BUILDNUMBER",
+                "buildId": "$BUILD_BUILDID",
+                "commit": "$BUILD_SOURCEVERSION",
+                "rama": "$BUILD_SOURCEBRANCHNAME",
+                "fechaBuild": "$FECHA",
+                "pipeline": "$BUILD_DEFINITIONNAME"
+              }
+              EOF
+              echo "Contenido de buildinfo.json:"
+              cat "$DESTINO"
+            displayName: 'Generar buildinfo.json (trazabilidad commit → artefacto)'
+
+          - task: ArchiveFiles@2
+            displayName: 'Comprimir en ponderix-$(Build.BuildNumber).zip'
+            inputs:
+              rootFolderOrFile: $(Build.ArtifactStagingDirectory)/publish
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: $(Build.ArtifactStagingDirectory)/$(artifactName)/ponderix-$(Build.BuildNumber).zip
+              replaceExistingArchive: true
+
+          - bash: |
+              set -euo pipefail
+              cp "$BUILD_ARTIFACTSTAGINGDIRECTORY/publish/buildinfo.json" "$BUILD_ARTIFACTSTAGINGDIRECTORY/$ARTIFACT_NAME/buildinfo.json"
+              CORTO=`echo "$BUILD_SOURCEVERSION" | cut -c1-7`
+              echo "##vso[build.addbuildtag]commit-$CORTO"
+              echo "##[section]Artefacto: $ARTIFACT_NAME/ponderix-$BUILD_BUILDNUMBER.zip"
+              echo "##[section]Commit:    $BUILD_SOURCEVERSION ($BUILD_SOURCEBRANCHNAME)"
+              ls -la "$BUILD_ARTIFACTSTAGINGDIRECTORY/$ARTIFACT_NAME"
+            displayName: 'Etiquetar ejecución y listar artefacto'
+            env:
+              ARTIFACT_NAME: $(artifactName)
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publicar artefacto "$(artifactName)"'
+            inputs:
+              targetPath: $(Build.ArtifactStagingDirectory)/$(artifactName)
+              artifact: $(artifactName)
+              publishLocation: pipeline
