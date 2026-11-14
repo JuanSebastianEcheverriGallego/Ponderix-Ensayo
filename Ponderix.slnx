@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ponderix.Api/Ponderix.Api.csproj" />
+  </Folder>
+</Solution>

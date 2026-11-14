@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ponderix · Calculadora de notas ponderadas</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="cabecera">
+    <h1>Ponderix</h1>
+    <p>Calculadora de notas ponderadas con los niveles de la rúbrica (escala 0.0 – 5.0).</p>
+    <p id="novedad" class="novedad">Cargando novedades…</p>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>1. Elija una plantilla o escriba sus criterios</h2>
+      <div id="plantillas" class="plantillas" aria-label="Plantillas de rúbricas"></div>
+
+      <form id="formulario" novalidate>
+        <table>
+          <thead>
+            <tr><th>Criterio</th><th>Peso (%)</th><th>Nota (0–5)</th><th></th></tr>
+          </thead>
+          <tbody id="filas"></tbody>
+        </table>
+        <div class="acciones">
+          <button type="button" id="agregar" class="secundario">+ Agregar criterio</button>
+          <span id="suma-pesos" class="suma">Suma de pesos: 0 %</span>
+          <button type="submit">Calcular nota</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" aria-live="polite">
+      <h2>2. Resultado</h2>
+      <div id="resultado" class="resultado vacio">Complete los criterios y pulse «Calcular nota».</div>
+    </section>
+  </main>
+
+  <footer id="pie" class="pie">Versión: cargando…</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
